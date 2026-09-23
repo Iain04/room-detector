@@ -1,0 +1,10 @@
+CONFIG_IDF_TARGET="esp32s3"
+
+# CSI must be enabled in the Wi-Fi driver.
+CONFIG_ESP_WIFI_CSI_ENABLED=y
+
+CONFIG_FREERTOS_HZ=1000
+
+# Wi-Fi + MQTT + TLS helpers do not fit the default 1 MB app partition.
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
