@@ -35,7 +35,7 @@ export function useMotionEvents() {
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch("/api/motion-events?limit=500", {
+      const response = await fetch("/api/motion-events?limit=10", {
         cache: "no-store",
         signal,
       });

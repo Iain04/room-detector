@@ -33,8 +33,8 @@ export type MotionEvent = {
 
 const MAX_EVENTS = 1_000;
 const MIN_RELIABLE_PACKET_RATE = 50;
-const WINDOW_MS = 3 * 60 * 1_000;
-const MIN_RELIABLE_SAMPLES = 120;
+const WINDOW_MS = 10 * 1_000; // 10 seconds
+const MIN_RELIABLE_SAMPLES = 8; // require at least 8 good readings
 const DEFAULT_BASELINE_MEDIAN = 0.4115;
 const DEFAULT_BASELINE_TOLERANCE = 0.0515;
 const store = globalThis as typeof globalThis & { __motionEvents?: MotionEvent[] };
@@ -43,6 +43,14 @@ const events = (store.__motionEvents ??= []);
 export function addMotionEvent(event: MotionEvent) {
   events.unshift(event);
   applyRollingMotionDecision(event);
+  const status = event.decision === "present"
+    ? "OCCUPIED"
+    : event.decision === "clear"
+      ? "VACANT"
+      : event.decision === "ignored"
+        ? "SIGNAL UNRELIABLE"
+        : "CALIBRATING";
+  console.log(`[occupancy] room=${event.room_id ?? "unknown"} device=${event.device_id} status=${status}`);
   if (events.length > MAX_EVENTS) events.length = MAX_EVENTS;
   return event;
 }
@@ -86,7 +94,7 @@ function median(values: number[]) {
 }
 
 /**
- * Classifies activity over the previous three minutes for one device/room.
+ * Classifies activity over the previous ten seconds for one device/room.
  * It compares the window's median baseline_diff with an empty-room reference.
  * packet_rate only gates data quality; RSSI is not used as a motion signal.
  */
