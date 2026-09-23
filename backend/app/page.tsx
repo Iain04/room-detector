@@ -26,6 +26,7 @@ type Room = {
   stateSince: string;
   lastUpdated: string;
   isDemo: boolean;
+  isCalibrating: boolean;
 };
 
 function Icon({ name, size = 18 }: { name: "search" | "building" | "clock"; size?: number }) {
@@ -46,9 +47,9 @@ function makeDemoEvents(now: number): MotionEvent[] {
     const sinceMinutes = room.vacantMinutes + blockIndex * 7;
     const changedAt = new Date(now - sinceMinutes * 60_000).toISOString();
     return [
-      { device_id: id, timestamp: new Date(now - 2 * 60_000).toISOString(), motion_detected: occupied, confidence: 0.94 },
-      { device_id: id, timestamp: changedAt, motion_detected: occupied, confidence: 0.93 },
-      { device_id: id, timestamp: new Date(now - (sinceMinutes + 4) * 60_000).toISOString(), motion_detected: !occupied, confidence: 0.89 },
+      { device_id: id, timestamp: new Date(now - 2 * 60_000).toISOString(), motion_detected: occupied, confidence: 0.94, decision: occupied ? "present" : "clear" },
+      { device_id: id, timestamp: changedAt, motion_detected: occupied, confidence: 0.93, decision: occupied ? "present" : "clear" },
+      { device_id: id, timestamp: new Date(now - (sinceMinutes + 4) * 60_000).toISOString(), motion_detected: !occupied, confidence: 0.89, decision: occupied ? "clear" : "present" },
     ];
   }));
 }
@@ -87,9 +88,11 @@ function buildRooms(events: MotionEvent[]): Room[] {
   return [...groups.entries()].map(([id, readings]) => {
     const ordered = [...readings].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
     const latest = ordered[ordered.length - 1];
-    let stateSince = ordered[0].timestamp;
-    for (let index = 1; index < ordered.length; index += 1) {
-      if (ordered[index].motion_detected !== ordered[index - 1].motion_detected) stateSince = ordered[index].timestamp;
+    const conclusive = ordered.filter((event) => event.decision === undefined || event.decision === "present" || event.decision === "clear");
+    const latestDecision = conclusive[conclusive.length - 1];
+    let stateSince = latestDecision?.timestamp ?? latest.timestamp;
+    for (let index = 1; index < conclusive.length; index += 1) {
+      if (conclusive[index].motion_detected !== conclusive[index - 1].motion_detected) stateSince = conclusive[index].timestamp;
     }
     const demo = demoDirectory.get(id);
     return {
@@ -97,21 +100,22 @@ function buildRooms(events: MotionEvent[]): Room[] {
       name: demo?.room.name ?? titleCase(id),
       type: demo?.room.type ?? "Room",
       block: demo?.block ?? "Unassigned",
-      occupied: latest.motion_detected,
+      occupied: (latestDecision ?? latest).decision === "present" || ((latestDecision ?? latest).decision === undefined && (latestDecision ?? latest).motion_detected),
       stateSince,
       lastUpdated: latest.timestamp,
       isDemo: Boolean(demo),
+      isCalibrating: !latestDecision || latest.decision === "warming_up" || latest.decision === "ignored",
     };
   }).sort((a, b) => Number(a.occupied) - Number(b.occupied) || a.block.localeCompare(b.block) || a.name.localeCompare(b.name));
 }
 
 function RoomCard({ room, now }: { room: Room; now: number }) {
   return <article className={`browse-room-card ${room.occupied ? "room-is-occupied" : "room-is-vacant"}`}>
-    <div className="browse-card-top"><span className="browse-block"><Icon name="building" size={14}/>Block {room.block}</span><span className={`browse-status ${room.occupied ? "status-occupied" : "status-vacant"}`}><i/>{room.occupied ? "Occupied" : "Vacant"}</span></div>
+    <div className="browse-card-top"><span className="browse-block"><Icon name="building" size={14}/>Block {room.block}</span><span className={`browse-status ${room.isCalibrating ? "status-calibrating" : room.occupied ? "status-occupied" : "status-vacant"}`}><i/>{room.isCalibrating ? "Calibrating" : room.occupied ? "Occupied" : "Vacant"}</span></div>
     <h3>{room.name}</h3>
     <span className="browse-room-type">{room.type}</span>
-    <div className="browse-state-time"><span>{room.occupied ? "Occupied since" : "Vacant since"}</span><strong>{localTime(room.stateSince)}</strong></div>
-    <div className="browse-room-bottom"><span>{room.isDemo ? "Sample room" : "Room sensor"}</span><span>Last updated {timeAgo(room.lastUpdated, now)}</span></div>
+    <div className="browse-state-time"><span>{room.isCalibrating ? "Occupancy status" : room.occupied ? "Occupied since" : "Vacant since"}</span><strong>{room.isCalibrating ? "Checking" : localTime(room.stateSince)}</strong></div>
+    <div className="browse-room-bottom"><span>{room.isDemo ? "Sample room" : room.isCalibrating ? "Sensor checking" : "Room sensor"}</span><span>Last updated {timeAgo(room.lastUpdated, now)}</span></div>
   </article>;
 }
 
@@ -124,11 +128,11 @@ export default function Home() {
   useEffect(() => setDemoEvents(makeDemoEvents(Date.now())), []);
   const rooms = useMemo(() => buildRooms([...events, ...demoEvents]), [events, demoEvents]);
   const counts = useMemo(() => rooms.reduce((result, room) => {
-    result[room.occupied ? "Occupied" : "Vacant"] += 1;
+    if (!room.isCalibrating) result[room.occupied ? "Occupied" : "Vacant"] += 1;
     return result;
   }, { Vacant: 0, Occupied: 0 }), [rooms]);
   const visibleRooms = rooms.filter((room) => {
-    const matchesOccupancy = occupancy === "All rooms" || (occupancy === "Occupied") === room.occupied;
+    const matchesOccupancy = occupancy === "All rooms" || (!room.isCalibrating && (occupancy === "Occupied") === room.occupied);
     const matchesBlock = block === "All blocks" || room.block === block;
     const matchesQuery = `${room.name} ${room.type} ${room.block}`.toLowerCase().includes(query.toLowerCase());
     return matchesOccupancy && matchesBlock && matchesQuery;

@@ -3,6 +3,18 @@
 .env.local
 .env*.local
 
+# Local sensor captures; copy a CSV elsewhere before sharing it.
+backend/data/
+backend/.matplotlib-cache/
+
+# Dependencies and generated application output (recreated with pnpm install/build)
+node_modules/
+**/node_modules/
+.pnpm-store/
+**/.pnpm-store/
+.next/
+**/.next/
+
 # OS / editor
 .DS_Store
 Thumbs.db

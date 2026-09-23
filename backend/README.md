@@ -22,8 +22,17 @@ Open `http://localhost:3000`. Dependencies are intentionally not committed;
 Set `MQTT_URL` in `.env.local` to your broker (and optional credentials in the
 URL), then publish JSON to `MQTT_MOTION_EVENTS_TOPIC`, which defaults to
 `room-detector/motion-events`. The payload is the existing motion-event JSON;
-no data fields have changed. `GET /api/motion-events?limit=10` remains the
-dashboard history endpoint. `POST /api/motion-events` now returns `410 Gone`.
+`GET /api/motion-events?limit=10` remains the dashboard history endpoint.
+`POST /api/motion-events` now returns `410 Gone`.
+
+The backend ignores readings with `packet_rate < 50`. It waits for a
+three-minute, per-device window with at least 120 calibrated, reliable samples,
+then computes the median `baseline_diff`. It flags activity when the absolute
+deviation from the empty-room reference exceeds
+`MOTION_BASELINE_DIFF_TOLERANCE`. The supplied study-room capture calibrated
+the reference median to `0.4115` and tolerance to `0.05`. Recalculate these
+values from a fresh empty-room capture whenever the room or device placement
+changes. RSSI is retained for diagnostics but is not used for detection.
 
 For a local broker with Docker:
 
@@ -34,9 +43,18 @@ docker run --rm -p 1883:1883 --name room-detector-mqtt eclipse-mosquitto
 ## Publish a test event
 
 ```powershell
-$body = @{ device_id = 'esp32-rx-01'; room_id = 'study-room-2'; ts = 1790138400123; motion_score = 0.82; motion_max = 1.4; baseline_diff = 0.35; rssi = -48; packet_rate = 98 } | ConvertTo-Json -Compress
+$body = @{ device_id = 'esp32-rx-01'; room_id = 'study-room-2'; ts = 1790169216838; timestamp = '2026-09-23T13:13:36.838Z'; motion_score = 2.035; motion_excess = 0.406; motion_max = 4.89; baseline_diff = 0.114; rssi = -42; packet_rate = 101; calibrated = $true } | ConvertTo-Json -Compress
 pnpm exec mqtt pub -h localhost -t room-detector/motion-events -m $body -q 1
 ```
 
 Then inspect `http://localhost:3000/api/motion-events?limit=10` or the
 dashboard. The in-memory event list resets whenever the server restarts.
+
+## CSV captures
+
+Every valid MQTT reading is appended to a timestamped CSV under `data/` for
+the lifetime of the server process. Stop the server after the empty-room run;
+the next server start creates a new CSV for the activity run. Set
+`MOTION_CSV_PATH=data/empty-room.csv` in `.env.local` only when you want an
+explicit filename. Capture files include raw telemetry, packet reliability,
+the three-minute decision, confidence, and rolling-window statistics.

@@ -5,9 +5,22 @@ import { useCallback, useEffect, useState } from "react";
 /** The shared device/backend/dashboard event contract. */
 export type MotionEvent = {
   device_id: string;
+  room_id?: string;
   timestamp: string;
   motion_detected: boolean;
   confidence: number;
+  decision?: "present" | "clear" | "ignored" | "warming_up";
+  reliable?: boolean;
+  calibrated?: boolean;
+  motion_score?: number;
+  motion_excess?: number | null;
+  packet_rate?: number;
+  window?: {
+    duration_ms: number;
+    reliable_sample_count: number;
+    baseline_median?: number;
+    baseline_deviation?: number;
+  };
   raw_metric?: number;
 };
 
