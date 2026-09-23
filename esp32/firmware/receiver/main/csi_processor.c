@@ -35,6 +35,8 @@
 
 #define NVS_NAMESPACE "csi"
 #define NVS_KEY_BASELINE "baseline"
+#define NVS_KEY_NOISE "noise"
+#define MIN_RELIABLE_RATE 50
 
 static const char *TAG = "csi_proc";
 
@@ -56,6 +58,8 @@ static csi_calibration_cb_t s_calibration_cb;
 /* Worker-task state (only touched by the worker). */
 static float s_baseline[CSI_MAX_SUBCARRIERS];
 static int s_baseline_n;
+/* Mean motion_score of the empty room, measured during calibration. */
+static float s_noise_floor;
 
 static bool is_null_subcarrier(int k)
 {
@@ -64,6 +68,7 @@ static bool is_null_subcarrier(int k)
 
 /* ---------------------------------------------------------------- NVS */
 
+#if CONFIG_CSI_PERSIST_BASELINE
 static void baseline_load(void)
 {
     nvs_handle_t h;
@@ -76,7 +81,16 @@ static void baseline_load(void)
     nvs_close(h);
     if (err == ESP_OK && size > 0 && size % sizeof(float) == 0) {
         s_baseline_n = size / sizeof(float);
-        ESP_LOGI(TAG, "Loaded empty-room baseline from NVS (%d subcarriers)", s_baseline_n);
+        nvs_handle_t h2;
+        if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &h2) == ESP_OK) {
+            size_t nsize = sizeof(s_noise_floor);
+            if (nvs_get_blob(h2, NVS_KEY_NOISE, &s_noise_floor, &nsize) != ESP_OK) {
+                s_noise_floor = 0;
+            }
+            nvs_close(h2);
+        }
+        ESP_LOGI(TAG, "Loaded empty-room baseline from NVS (%d subcarriers, noise floor %.2f)",
+                 s_baseline_n, s_noise_floor);
     } else {
         s_baseline_n = 0;
         ESP_LOGW(TAG, "No baseline stored yet; send a calibrate command in an empty room");
@@ -92,11 +106,15 @@ static esp_err_t baseline_save(void)
     }
     err = nvs_set_blob(h, NVS_KEY_BASELINE, s_baseline, s_baseline_n * sizeof(float));
     if (err == ESP_OK) {
+        err = nvs_set_blob(h, NVS_KEY_NOISE, &s_noise_floor, sizeof(s_noise_floor));
+    }
+    if (err == ESP_OK) {
         err = nvs_commit(h);
     }
     nvs_close(h);
     return err;
 }
+#endif
 
 /* ---------------------------------------------------------------- callback */
 
@@ -139,6 +157,8 @@ typedef struct {
     uint32_t count[CSI_MAX_SUBCARRIERS];
     uint32_t packets;
     int n_sc;
+    double motion_sum;        /* sum of reliable windows' motion_score */
+    uint32_t motion_windows;
 } calibration_t;
 
 static int packet_amplitudes(const csi_packet_t *pkt, float amp[CSI_MAX_SUBCARRIERS],
@@ -174,7 +194,7 @@ static void debug_print_raw(const csi_packet_t *pkt)
 #endif
 }
 
-static void finish_window(window_acc_t *w)
+static void finish_window(window_acc_t *w, calibration_t *cal)
 {
     csi_window_t out = {
         .packet_rate = (int)w->packets,
@@ -213,6 +233,14 @@ static void finish_window(window_acc_t *w)
         }
     }
 
+    /* Calibration also learns the empty room's motion noise floor. */
+    if (cal->active && w->packets >= MIN_RELIABLE_RATE) {
+        cal->motion_sum += out.motion_score;
+        cal->motion_windows++;
+    }
+    /* Movement above the empty-room noise; 0 = as quiet as the empty room. */
+    out.motion_excess = out.calibrated ? fmaxf(0.0f, out.motion_score - s_noise_floor) : 0.0f;
+
     if (s_window_cb) {
         s_window_cb(&out);
     }
@@ -224,7 +252,7 @@ static void finish_calibration(calibration_t *cal)
     if (cal->packets == 0) {
         ESP_LOGE(TAG, "Calibration failed: no CSI packets received (is the sender running?)");
         if (s_calibration_cb) {
-            s_calibration_cb(false, 0, 0);
+            s_calibration_cb(false, 0, 0, 0);
         }
         return;
     }
@@ -233,13 +261,18 @@ static void finish_calibration(calibration_t *cal)
     for (int k = 0; k < s_baseline_n; k++) {
         s_baseline[k] = cal->count[k] ? (float)(cal->sum[k] / cal->count[k]) : 0.0f;
     }
-    esp_err_t err = baseline_save();
+    s_noise_floor = cal->motion_windows ? (float)(cal->motion_sum / cal->motion_windows) : 0.0f;
+    esp_err_t err = ESP_OK;
+#if CONFIG_CSI_PERSIST_BASELINE
+    err = baseline_save();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Saving baseline to NVS failed: %s", esp_err_to_name(err));
     }
-    ESP_LOGI(TAG, "Calibration complete: %" PRIu32 " packets, %d subcarriers", cal->packets, s_baseline_n);
+#endif
+    ESP_LOGI(TAG, "Calibration complete: %" PRIu32 " packets, %d subcarriers, noise floor %.2f",
+             cal->packets, s_baseline_n, s_noise_floor);
     if (s_calibration_cb) {
-        s_calibration_cb(err == ESP_OK, s_baseline_n, cal->packets);
+        s_calibration_cb(err == ESP_OK, s_baseline_n, cal->packets, s_noise_floor);
     }
 }
 
@@ -333,7 +366,7 @@ static void worker_task(void *arg)
             if (win.packets == 0) {
                 have_prev = false; /* gap: don't compare across silent windows */
             }
-            finish_window(&win);
+            finish_window(&win, &cal);
             memset(&win, 0, sizeof(win));
             next_window_us += WINDOW_US;
             if (next_window_us <= now) {
@@ -360,7 +393,11 @@ esp_err_t csi_processor_start(const uint8_t *sender_mac,
         memcpy(s_sender_mac, sender_mac, 6);
     }
 
+#if CONFIG_CSI_PERSIST_BASELINE
     baseline_load();
+#else
+    ESP_LOGI(TAG, "Starting uncalibrated (baseline is kept in RAM only; calibrate after each boot)");
+#endif
 
     s_packet_queue = xQueueCreate(CSI_QUEUE_LEN, sizeof(csi_packet_t));
     s_cmd_queue = xQueueCreate(2, sizeof(int));

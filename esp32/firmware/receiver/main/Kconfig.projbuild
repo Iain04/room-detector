@@ -93,6 +93,21 @@ menu "CSI Receiver Configuration"
             Subcarriers whose amplitude is below this value (in tenths) are
             treated as null/guard subcarriers and excluded. 10 = 1.0.
 
+    config CSI_PERSIST_BASELINE
+        bool "Keep calibration across reboots (save to flash)"
+        default n
+        help
+            Off: every boot starts uncalibrated and the empty-room baseline
+            lives only in RAM - send the calibrate command after each boot.
+            On: the baseline is saved to NVS and reloaded at boot.
+
+    config CSI_LOG_TIMEZONE
+        string "Time zone for serial log clock (POSIX TZ)"
+        default "SGT-8"
+        help
+            Only affects the HH:MM:SS shown in serial log lines. Telemetry
+            timestamps are always UTC. Example: "SGT-8" (Singapore, UTC+8).
+
     config CSI_LOG_WINDOWS
         bool "Log each 1-second feature window"
         default y
