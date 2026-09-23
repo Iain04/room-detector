@@ -14,6 +14,7 @@ typedef struct {
     float motion_score;   /* mean over valid subcarriers of amplitude std-dev */
     float motion_max;     /* max packet-to-packet mean amplitude change */
     float baseline_diff;  /* normalised mean |window mean - baseline| */
+    float motion_excess;  /* motion_score minus the empty-room noise floor (>= 0); 0 if uncalibrated */
     int rssi;             /* mean RSSI (dBm) */
     int packet_rate;      /* CSI packets received in the window */
     int valid_subcarriers;
@@ -22,8 +23,9 @@ typedef struct {
 
 typedef void (*csi_window_cb_t)(const csi_window_t *window);
 
-/* Called when calibration finishes. ok=false means no packets were received. */
-typedef void (*csi_calibration_cb_t)(bool ok, int subcarriers, uint32_t packets);
+/* Called when calibration finishes. ok=false means no packets were received.
+ * noise_floor is the empty room's mean motion_score. */
+typedef void (*csi_calibration_cb_t)(bool ok, int subcarriers, uint32_t packets, float noise_floor);
 
 /* sender_mac may be NULL to accept CSI from any transmitter. */
 esp_err_t csi_processor_start(const uint8_t *sender_mac,

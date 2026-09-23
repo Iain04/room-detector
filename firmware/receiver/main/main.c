@@ -9,6 +9,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <sys/time.h>
+#include <time.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -138,33 +139,78 @@ static void publish(const char *topic, const char *payload, int qos)
 
 /* ---------------------------------------------------------------- CSI callbacks */
 
+/* ISO 8601 UTC with milliseconds as a JSON value, e.g. "2026-09-23T12:53:20.921Z",
+ * or null if the clock has not synced yet. */
+static void iso_timestamp_json(int64_t ms, char *out, size_t len)
+{
+    if (ms == 0) {
+        strlcpy(out, "null", len);
+        return;
+    }
+    time_t secs = ms / 1000;
+    struct tm tm_utc;
+    gmtime_r(&secs, &tm_utc);
+    char base[24];
+    strftime(base, sizeof(base), "%Y-%m-%dT%H:%M:%S", &tm_utc);
+    snprintf(out, len, "\"%s.%03dZ\"", base, (int)(ms % 1000));
+}
+
+/* Local wall-clock time for log lines, e.g. "20:53:20", or "--:--:--" before sync. */
+static void local_clock(int64_t ms, char *out, size_t len)
+{
+    if (ms == 0) {
+        strlcpy(out, "--:--:--", len);
+        return;
+    }
+    time_t secs = ms / 1000;
+    struct tm tm_local;
+    localtime_r(&secs, &tm_local);
+    strftime(out, len, "%H:%M:%S", &tm_local);
+}
+
 static void on_window(const csi_window_t *w)
 {
-    char json[256];
+    int64_t ts = now_ms();
+    char iso[40];
+    iso_timestamp_json(ts, iso, sizeof(iso));
+
+    /* motion_excess is null until calibrated (no noise floor to subtract yet). */
+    char excess[16];
+    if (w->calibrated) {
+        snprintf(excess, sizeof(excess), "%.3f", w->motion_excess);
+    } else {
+        strlcpy(excess, "null", sizeof(excess));
+    }
+
+    char json[352];
     snprintf(json, sizeof(json),
-             "{\"device_id\":\"%s\",\"room_id\":\"%s\",\"ts\":%" PRId64
-             ",\"motion_score\":%.3f,\"motion_max\":%.3f,\"baseline_diff\":%.3f"
+             "{\"device_id\":\"%s\",\"room_id\":\"%s\",\"ts\":%" PRId64 ",\"timestamp\":%s"
+             ",\"motion_score\":%.3f,\"motion_excess\":%s,\"motion_max\":%.3f,\"baseline_diff\":%.3f"
              ",\"rssi\":%d,\"packet_rate\":%d,\"calibrated\":%s}",
-             DEVICE_ID, ROOM_ID, now_ms(),
-             w->motion_score, w->motion_max, w->baseline_diff,
+             DEVICE_ID, ROOM_ID, ts, iso,
+             w->motion_score, excess, w->motion_max, w->baseline_diff,
              w->rssi, w->packet_rate, w->calibrated ? "true" : "false");
     publish(s_topic_telemetry, json, 1);
 
 #if CONFIG_CSI_LOG_WINDOWS
-    ESP_LOGI(TAG, "rate=%3d rssi=%d motion=%.2f max=%.2f base_diff=%.2f sc=%d%s%s",
-             w->packet_rate, w->rssi, w->motion_score, w->motion_max, w->baseline_diff,
+    char clock[16];
+    local_clock(ts, clock, sizeof(clock));
+    ESP_LOGI(TAG, "%s rate=%3d rssi=%d motion=%.2f excess=%.2f max=%.2f base_diff=%.2f sc=%d%s%s",
+             clock, w->packet_rate, w->rssi, w->motion_score, w->motion_excess, w->motion_max,
+             w->baseline_diff,
              w->valid_subcarriers, w->calibrated ? "" : " (uncalibrated)",
              s_mqtt_connected ? "" : " [mqtt offline]");
 #endif
 }
 
-static void on_calibration_done(bool ok, int subcarriers, uint32_t packets)
+static void on_calibration_done(bool ok, int subcarriers, uint32_t packets, float noise_floor)
 {
-    char json[192];
+    char json[224];
     snprintf(json, sizeof(json),
-             "{\"device_id\":\"%s\",\"ts\":%" PRId64 ",\"event\":\"%s\",\"subcarriers\":%d,\"packets\":%" PRIu32 "}",
+             "{\"device_id\":\"%s\",\"ts\":%" PRId64 ",\"event\":\"%s\",\"subcarriers\":%d"
+             ",\"packets\":%" PRIu32 ",\"noise_floor\":%.3f}",
              DEVICE_ID, now_ms(), ok ? "calibration_done" : "calibration_failed",
-             subcarriers, packets);
+             subcarriers, packets, noise_floor);
     publish(s_topic_status, json, 0);
 }
 
@@ -360,6 +406,10 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    /* Local time zone for log lines only; telemetry timestamps are UTC. */
+    setenv("TZ", CONFIG_CSI_LOG_TIMEZONE, 1);
+    tzset();
 
     strlcpy(s_topic_telemetry, MQTT_TELEMETRY_TOPIC, sizeof(s_topic_telemetry));
     snprintf(s_topic_heartbeat, sizeof(s_topic_heartbeat), "devices/%s/heartbeat", DEVICE_ID);
