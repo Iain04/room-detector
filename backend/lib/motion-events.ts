@@ -1,140 +1,185 @@
-/**
- * Deliberately small, process-local event store for the hackathon demo.
- * Keeping this module separate means it can later be replaced with Redis or a
- * database without changing the HTTP route.
- */
+/** Process-local event store and three-minute motion classifier. */
+export type MotionDecision = "present" | "clear" | "ignored" | "warming_up";
+
+export type MotionWindow = {
+  duration_ms: number;
+  sample_count: number;
+  reliable_sample_count: number;
+  calibrated_sample_count: number;
+  baseline_median?: number;
+  baseline_deviation?: number;
+  baseline_tolerance?: number;
+};
 
 export type MotionEvent = {
   device_id: string;
+  room_id?: string;
   timestamp: string;
+  ts?: number;
   motion_detected: boolean;
   confidence: number;
+  decision: MotionDecision;
+  reliable: boolean;
+  window?: MotionWindow;
   raw_metric?: number;
-  room_id?: string;
-  ts?: number;
   motion_score?: number;
+  motion_excess?: number | null;
   motion_max?: number;
   baseline_diff?: number;
   rssi?: number;
   packet_rate?: number;
+  calibrated?: boolean;
 };
 
 const MAX_EVENTS = 1_000;
-
-// Retain the store during Next.js development hot reloads.
-const store = globalThis as typeof globalThis & {
-  __motionEvents?: MotionEvent[];
-};
-
+const MIN_RELIABLE_PACKET_RATE = 50;
+const WINDOW_MS = 3 * 60 * 1_000;
+const MIN_RELIABLE_SAMPLES = 120;
+const DEFAULT_BASELINE_MEDIAN = 0.4115;
+const DEFAULT_BASELINE_TOLERANCE = 0.0515;
+const store = globalThis as typeof globalThis & { __motionEvents?: MotionEvent[] };
 const events = (store.__motionEvents ??= []);
 
 export function addMotionEvent(event: MotionEvent) {
   events.unshift(event);
+  applyRollingMotionDecision(event);
   if (events.length > MAX_EVENTS) events.length = MAX_EVENTS;
   return event;
 }
 
-export function getMotionEvents(limit: number) {
-  return events.slice(0, limit);
-}
-
+export function getMotionEvents(limit: number) { return events.slice(0, limit); }
 export function parseLimit(value: string | null) {
   if (value === null) return 100;
   if (!/^\d+$/.test(value)) return null;
-
   const limit = Number(value);
   return limit >= 1 && limit <= 500 ? limit : null;
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+function optionalString(value: unknown) { return typeof value === "string" && value.trim() ? value.trim() : undefined; }
+function optionalNumber(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : undefined; }
+function clamp(value: number) { return Math.min(1, Math.max(0, value)); }
+function numericEnvironmentValue(name: string, fallback: number) {
+  const configured = Number(process.env[name]);
+  return Number.isFinite(configured) && configured >= 0 ? configured : fallback;
 }
-
-function optionalString(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+function baselineMedian() { return numericEnvironmentValue("MOTION_BASELINE_DIFF_MEDIAN", DEFAULT_BASELINE_MEDIAN); }
+function baselineTolerance() { return numericEnvironmentValue("MOTION_BASELINE_DIFF_TOLERANCE", DEFAULT_BASELINE_TOLERANCE); }
+function eventTime(timestampValue: unknown, tsValue: unknown) {
+  const timestamp = optionalString(timestampValue);
+  if (timestamp && !Number.isNaN(Date.parse(timestamp))) {
+    const date = new Date(timestamp);
+    return { timestamp: date.toISOString(), ts: date.getTime() };
+  }
+  const ts = optionalNumber(tsValue);
+  if (ts !== undefined && Number.isInteger(ts) && ts > 0) {
+    const date = new Date(ts);
+    if (!Number.isNaN(date.getTime())) return { timestamp: date.toISOString(), ts };
+  }
+  const receivedAt = new Date();
+  return { timestamp: receivedAt.toISOString(), ts: receivedAt.getTime() };
 }
-
-function optionalNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+function eventTimeMs(event: MotionEvent) { return event.ts ?? Date.parse(event.timestamp); }
+function median(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
 
 /**
- * Supports the agreed HTTP contract and the CSI telemetry shape supplied for
- * this prototype. Detailed CSI messages are normalized into the agreed fields.
+ * Classifies activity over the previous three minutes for one device/room.
+ * It compares the window's median baseline_diff with an empty-room reference.
+ * packet_rate only gates data quality; RSSI is not used as a motion signal.
  */
+function applyRollingMotionDecision(current: MotionEvent) {
+  if (current.motion_score === undefined || !current.reliable) return;
+
+  const end = eventTimeMs(current);
+  const windowEvents = events.filter((event) =>
+    event.device_id === current.device_id &&
+    event.room_id === current.room_id &&
+    event.motion_score !== undefined &&
+    eventTimeMs(event) >= end - WINDOW_MS && eventTimeMs(event) <= end,
+  );
+  const reliableEvents = windowEvents.filter((event) => event.reliable);
+  const timestamps = windowEvents.map(eventTimeMs);
+  const durationMs = timestamps.length ? end - Math.min(...timestamps) : 0;
+  const baseWindow: MotionWindow = {
+    duration_ms: Math.max(0, durationMs),
+    sample_count: windowEvents.length,
+    reliable_sample_count: reliableEvents.length,
+    calibrated_sample_count: reliableEvents.filter((event) => event.calibrated).length,
+  };
+
+  if (durationMs < WINDOW_MS || reliableEvents.length < MIN_RELIABLE_SAMPLES) {
+    current.motion_detected = false;
+    current.confidence = 0;
+    current.decision = "warming_up";
+    current.window = baseWindow;
+    return;
+  }
+
+  const calibratedBaselineDiffs = reliableEvents
+    .filter((event) => event.calibrated && event.baseline_diff !== undefined)
+    .map((event) => event.baseline_diff!);
+  if (calibratedBaselineDiffs.length < MIN_RELIABLE_SAMPLES) {
+    current.motion_detected = false;
+    current.confidence = 0;
+    current.decision = "warming_up";
+    current.window = baseWindow;
+    return;
+  }
+
+  const emptyRoomMedian = baselineMedian();
+  const tolerance = baselineTolerance();
+  const windowMedian = median(calibratedBaselineDiffs);
+  const deviation = Math.abs(windowMedian - emptyRoomMedian);
+  const motionDetected = deviation > tolerance;
+  const coverage = clamp(reliableEvents.length / WINDOW_MS * 1_000);
+  const confidence = clamp(0.5 + (deviation - tolerance) / (2 * tolerance)) * coverage;
+
+  current.motion_detected = motionDetected;
+  current.confidence = confidence;
+  current.decision = motionDetected ? "present" : "clear";
+  current.window = {
+    ...baseWindow,
+    baseline_median: windowMedian,
+    baseline_deviation: deviation,
+    baseline_tolerance: tolerance,
+  };
+}
+
+/** Parses the original contract plus the ESP32-S3 MQTT telemetry contract. */
 export function parseMotionEvent(body: unknown): MotionEvent | null {
   if (!isRecord(body)) return null;
-
   const deviceId = optionalString(body.device_id);
   if (!deviceId) return null;
 
-  const timestamp = optionalString(body.timestamp);
-  const motionDetected = body.motion_detected;
-  const confidence = optionalNumber(body.confidence);
-  const rawMetric = optionalNumber(body.raw_metric);
-
-  // Original DATA CONTRACT.
-  if (
-    timestamp &&
-    !Number.isNaN(Date.parse(timestamp)) &&
-    typeof motionDetected === "boolean" &&
-    confidence !== undefined &&
-    confidence >= 0 &&
-    confidence <= 1 &&
-    (body.raw_metric === undefined || rawMetric !== undefined)
-  ) {
-    return {
-      device_id: deviceId,
-      timestamp: new Date(timestamp).toISOString(),
-      motion_detected: motionDetected,
-      confidence,
-      ...(rawMetric === undefined ? {} : { raw_metric: rawMetric }),
-      ...(optionalString(body.room_id) ? { room_id: optionalString(body.room_id) } : {}),
-    };
+  const legacyTimestamp = optionalString(body.timestamp);
+  const legacyConfidence = optionalNumber(body.confidence);
+  const legacyRawMetric = optionalNumber(body.raw_metric);
+  if (legacyTimestamp && !Number.isNaN(Date.parse(legacyTimestamp)) && typeof body.motion_detected === "boolean" && legacyConfidence !== undefined && legacyConfidence >= 0 && legacyConfidence <= 1 && (body.raw_metric === undefined || legacyRawMetric !== undefined)) {
+    const time = eventTime(legacyTimestamp, undefined);
+    return { device_id: deviceId, timestamp: time.timestamp, ts: time.ts, motion_detected: body.motion_detected, confidence: legacyConfidence, decision: body.motion_detected ? "present" : "clear", reliable: true, ...(legacyRawMetric === undefined ? {} : { raw_metric: legacyRawMetric }), ...(optionalString(body.room_id) ? { room_id: optionalString(body.room_id) } : {}) };
   }
 
-  // CSI telemetry shape: derive the dashboard-compatible status from score.
-  const ts = optionalNumber(body.ts);
+  const roomId = optionalString(body.room_id);
   const motionScore = optionalNumber(body.motion_score);
   const motionMax = optionalNumber(body.motion_max);
   const baselineDiff = optionalNumber(body.baseline_diff);
   const rssi = optionalNumber(body.rssi);
   const packetRate = optionalNumber(body.packet_rate);
-  const roomId = optionalString(body.room_id);
+  const motionExcess = body.motion_excess === null ? null : optionalNumber(body.motion_excess);
+  const calibrated = body.calibrated;
+  const invalidMotionExcess = motionExcess === undefined || (motionExcess !== null && motionExcess < 0);
+  if (!roomId || motionScore === undefined || motionScore < 0 || motionMax === undefined || motionMax < 0 || baselineDiff === undefined || baselineDiff < 0 || rssi === undefined || packetRate === undefined || packetRate < 0 || !Number.isInteger(packetRate) || typeof calibrated !== "boolean" || (body.motion_excess !== null && invalidMotionExcess) || (calibrated && motionExcess === null)) return null;
 
-  if (
-    !roomId ||
-    ts === undefined ||
-    !Number.isInteger(ts) ||
-    ts <= 0 ||
-    motionScore === undefined ||
-    motionScore < 0 ||
-    motionMax === undefined ||
-    baselineDiff === undefined ||
-    rssi === undefined ||
-    packetRate === undefined ||
-    packetRate < 0
-  ) {
-    return null;
-  }
-
-  const date = new Date(ts);
-  if (Number.isNaN(date.getTime())) return null;
-
+  const time = eventTime(body.timestamp, body.ts);
+  const reliable = packetRate >= MIN_RELIABLE_PACKET_RATE;
   return {
-    device_id: deviceId,
-    room_id: roomId,
-    ts,
-    timestamp: date.toISOString(),
-    // Hackathon default: firmware can use the original contract to select a
-    // different threshold explicitly.
-    motion_detected: motionScore >= 0.5,
-    confidence: Math.min(1, motionScore),
-    raw_metric: baselineDiff,
-    motion_score: motionScore,
-    motion_max: motionMax,
-    baseline_diff: baselineDiff,
-    rssi,
-    packet_rate: packetRate,
+    device_id: deviceId, room_id: roomId, ...time, reliable,
+    motion_detected: false, confidence: 0, decision: reliable ? "warming_up" : "ignored",
+    raw_metric: calibrated ? motionExcess! : motionScore,
+    motion_score: motionScore, motion_excess: motionExcess, motion_max: motionMax,
+    baseline_diff: baselineDiff, rssi, packet_rate: packetRate, calibrated,
   };
 }
