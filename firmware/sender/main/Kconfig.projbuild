@@ -1,0 +1,47 @@
+menu "CSI Sender Configuration"
+
+    config CSI_SEND_CHANNEL
+        int "Wi-Fi channel"
+        range 1 13
+        default 6
+        help
+            Fixed 2.4 GHz channel used to broadcast packets. This MUST be the
+            same channel as the access point the receiver connects to,
+            otherwise the receiver never hears the sender.
+
+    config CSI_SEND_FREQUENCY_HZ
+        int "Packets per second"
+        range 10 500
+        default 100
+        help
+            Broadcast rate. 100 Hz matches what the receiver expects
+            (the backend ignores windows with fewer than 50 packets/s).
+
+    config CSI_SEND_PAYLOAD_LEN
+        int "Payload length (bytes)"
+        range 16 250
+        default 32
+        help
+            Size of each ESP-NOW broadcast. Small payloads keep airtime low.
+
+    config CSI_SEND_USE_CUSTOM_MAC
+        bool "Use a custom station MAC address"
+        default n
+        help
+            By default the board's factory MAC is used and printed at boot.
+            Enable this to force a fixed, easy-to-remember MAC so the receiver
+            configuration does not change if you swap sender boards.
+
+    config CSI_SEND_CUSTOM_MAC
+        string "Custom MAC (aa:bb:cc:dd:ee:ff)"
+        depends on CSI_SEND_USE_CUSTOM_MAC
+        default "1a:00:00:00:00:01"
+        help
+            Must be a unicast address (first byte even).
+
+    config CSI_SEND_STATS_INTERVAL_S
+        int "Statistics log interval (seconds)"
+        range 1 3600
+        default 10
+
+endmenu
