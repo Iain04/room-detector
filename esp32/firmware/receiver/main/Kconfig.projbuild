@@ -1,0 +1,114 @@
+menu "CSI Receiver Configuration"
+
+    menu "Wi-Fi"
+        config CSI_WIFI_SSID
+            string "Wi-Fi SSID"
+            default "myssid"
+            help
+                2.4 GHz network to join. Note the channel this access point
+                uses: the sender must be configured to the same channel.
+
+        config CSI_WIFI_PASSWORD
+            string "Wi-Fi password"
+            default "mypassword"
+    endmenu
+
+    menu "MQTT"
+        config CSI_MQTT_BROKER_URL
+            string "Broker URL"
+            default "mqtt://192.168.1.100:1883"
+            help
+                Use your laptop's LAN IP, not localhost.
+
+        config CSI_MQTT_TELEMETRY_TOPIC
+            string "Telemetry topic"
+            default "room-detector/motion-events"
+            help
+                Topic the 1-second motion telemetry is published to (QoS 1).
+                Must match MQTT_MOTION_EVENTS_TOPIC in the backend.
+
+        config CSI_MQTT_USERNAME
+            string "Username (optional)"
+            default ""
+
+        config CSI_MQTT_PASSWORD
+            string "Password (optional)"
+            default ""
+    endmenu
+
+    menu "Identity"
+        config CSI_ROOM_ID
+            string "Room ID"
+            default "study-room-2"
+            help
+                Must match a room_id in backend/rooms.yaml.
+
+        config CSI_DEVICE_ID
+            string "Device ID"
+            default "esp32-rx-01"
+    endmenu
+
+    choice CSI_SOURCE
+        prompt "CSI source"
+        default CSI_SOURCE_ROUTER
+        help
+            Where the measured packets come from. Can be overridden with
+            CSI_SOURCE=router|sender in .env.
+
+        config CSI_SOURCE_ROUTER
+            bool "Router (one ESP32: ping the Wi-Fi router, measure its replies)"
+        config CSI_SOURCE_SENDER
+            bool "Sender board (two ESP32s: measure the sender's broadcasts)"
+    endchoice
+
+    config CSI_ROUTER_PING_HZ
+        int "Router pings per second"
+        depends on CSI_SOURCE_ROUTER
+        range 10 200
+        default 100
+
+    config CSI_SENDER_MAC
+        string "Sender MAC address (aa:bb:cc:dd:ee:ff)"
+        default ""
+        help
+            Only used when the CSI source is the sender board.
+            Only CSI from this MAC is used. The sender prints its MAC at boot.
+            Leave empty during bring-up to accept CSI from any transmitter
+            (not recommended for real measurements).
+
+    config CSI_SNTP_SERVER
+        string "SNTP server"
+        default "pool.ntp.org"
+
+    config CSI_HEARTBEAT_INTERVAL_S
+        int "Heartbeat interval (seconds)"
+        range 10 3600
+        default 60
+
+    config CSI_MIN_AMPLITUDE_X10
+        int "Minimum valid subcarrier amplitude (x0.1)"
+        range 0 100
+        default 10
+        help
+            Subcarriers whose amplitude is below this value (in tenths) are
+            treated as null/guard subcarriers and excluded. 10 = 1.0.
+
+    config CSI_LOG_WINDOWS
+        bool "Log each 1-second feature window"
+        default y
+
+    config CSI_DEBUG_RAW
+        bool "Debug: print raw CSI over USB serial"
+        default n
+        help
+            Prints lines of the form CSI_DATA,<rssi>,<len>,[im,re,...].
+            At 100 Hz this floods a 115200 baud console, so only every Nth
+            packet is printed.
+
+    config CSI_DEBUG_PRINT_EVERY_N
+        int "Print every Nth packet"
+        depends on CSI_DEBUG_RAW
+        range 1 1000
+        default 10
+
+endmenu

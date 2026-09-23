@@ -1,0 +1,7 @@
+dependencies:
+  idf: ">=5.1"
+  # esp-mqtt is built into ESP-IDF v5.x but moved to the component registry in v6.0.
+  espressif/mqtt:
+    version: "*"
+    rules:
+      - if: "idf_version >=6.0"

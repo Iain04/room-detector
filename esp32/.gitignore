@@ -1,0 +1,13 @@
+# Secrets (Wi-Fi password etc.)
+.env
+
+# ESP-IDF build output and generated config
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+
+__pycache__/
+*.py[cod]
+.vscode/
+managed_components/
