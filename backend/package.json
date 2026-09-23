@@ -5,7 +5,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:motion": "node scripts/test-motion-algorithm.cjs"
   },
   "dependencies": {
     "mqtt": "5.14.1",

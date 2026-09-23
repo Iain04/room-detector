@@ -1,5 +1,6 @@
 import mqtt, { type MqttClient } from "mqtt";
 import { addMotionEvent, parseMotionEvent } from "./motion-events";
+import { appendMotionEventToCsv, getMotionCsvPath } from "./motion-event-csv";
 
 const DEFAULT_TOPIC = "room-detector/motion-events";
 
@@ -41,6 +42,7 @@ export function ensureMqttMotionSubscriber() {
       if (error) console.error("MQTT subscription failed:", error.message);
       else console.info(`Subscribed to MQTT topic: ${topic}`);
     });
+    console.info(`Writing motion capture CSV: ${getMotionCsvPath()}`);
   });
 
   client.on("message", (receivedTopic, payload) => {
@@ -53,6 +55,22 @@ export function ensureMqttMotionSubscriber() {
         return;
       }
       addMotionEvent(event);
+      appendMotionEventToCsv(event);
+      console.log("[motion-event]", {
+        topic: receivedTopic,
+        device_id: event.device_id,
+        room_id: event.room_id,
+        timestamp: event.timestamp,
+        motion_score: event.motion_score,
+        motion_excess: event.motion_excess,
+        baseline_diff: event.baseline_diff,
+        motion_max: event.motion_max,
+        packet_rate: event.packet_rate,
+        calibrated: event.calibrated,
+        reliable: event.reliable,
+        decision: event.decision,
+        window: event.window,
+      });
     } catch {
       console.warn("Discarded MQTT motion event with invalid JSON.");
     }
