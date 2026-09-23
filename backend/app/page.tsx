@@ -1,52 +1,152 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMotionEvents } from "./use-motion-events";
+import type { MotionEvent } from "./use-motion-events";
 
-type MotionEvent = {
-  device_id: string;
-  room_id?: string;
-  timestamp: string;
-  motion_detected: boolean;
-  confidence: number;
+const BLOCKS = ["55", "57", "59"] as const;
+const ROOM_TYPES = ["Meeting room", "Study room", "Recreational room"] as const;
+const ROOM_NAMES = [
+  { name: "Level 2 Meeting Room", type: "Meeting room", vacantMinutes: 34 },
+  { name: "Level 2 Study Room", type: "Study room", vacantMinutes: 18 },
+  { name: "Level 4 Recreational Room", type: "Recreational room", vacantMinutes: 57 },
+  { name: "Level 4 Meeting Room", type: "Meeting room", vacantMinutes: 9 },
+  { name: "Level 6 Study Room", type: "Study room", vacantMinutes: 72 },
+  { name: "Level 6 Meeting Room", type: "Meeting room", vacantMinutes: 26 },
+] as const;
+
+type OccupancyFilter = "All rooms" | "Vacant" | "Occupied";
+type BlockFilter = "All blocks" | (typeof BLOCKS)[number];
+type Room = {
+  id: string;
+  name: string;
+  type: string;
+  block: string;
+  occupied: boolean;
+  stateSince: string;
+  lastUpdated: string;
+  isDemo: boolean;
 };
 
-export default function Home() {
-  const [events, setEvents] = useState<MotionEvent[]>([]);
-  const [error, setError] = useState("");
+function Icon({ name, size = 18 }: { name: "search" | "building" | "clock"; size?: number }) {
+  const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true as const };
+  if (name === "search") return <svg {...common}><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg>;
+  if (name === "building") return <svg {...common}><path d="M4 21h16M6 21V5l6-2 6 2v16M9 8h.01M15 8h.01M9 12h.01M15 12h.01M10 21v-5h4v5"/></svg>;
+  return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>;
+}
 
-  useEffect(() => {
-    async function refresh() {
-      try {
-        const response = await fetch("/api/motion-events?limit=10", { cache: "no-store" });
-        if (!response.ok) throw new Error("Could not load motion events");
-        setEvents(await response.json());
-        setError("");
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not load motion events");
-      }
+function roomId(block: string, name: string) {
+  return `demo-${block}-${name.toLowerCase().replace(/\s+/g, "-")}`;
+}
+
+function makeDemoEvents(now: number): MotionEvent[] {
+  return BLOCKS.flatMap((block, blockIndex) => ROOM_NAMES.flatMap((room, roomIndex) => {
+    const id = roomId(block, room.name);
+    const occupied = (roomIndex + blockIndex) % 3 === 1;
+    const sinceMinutes = room.vacantMinutes + blockIndex * 7;
+    const changedAt = new Date(now - sinceMinutes * 60_000).toISOString();
+    return [
+      { device_id: id, timestamp: new Date(now - 2 * 60_000).toISOString(), motion_detected: occupied, confidence: 0.94 },
+      { device_id: id, timestamp: changedAt, motion_detected: occupied, confidence: 0.93 },
+      { device_id: id, timestamp: new Date(now - (sinceMinutes + 4) * 60_000).toISOString(), motion_detected: !occupied, confidence: 0.89 },
+    ];
+  }));
+}
+
+function titleCase(value: string) {
+  return value.replace(/^demo-(55|57|59)-/, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function timeAgo(timestamp: string, now: number) {
+  const seconds = Math.max(0, Math.floor((now - Date.parse(timestamp)) / 1_000));
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3_600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3_600)}h ago`;
+  return `${Math.floor(seconds / 86_400)}d ago`;
+}
+
+function localTime(timestamp: string) {
+  return new Date(timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function durationSince(timestamp: string, now: number) {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(timestamp)) / 60_000));
+  if (minutes < 1) return "less than a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return hours < 24 ? `${hours}h ${rest}m` : `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
+function buildRooms(events: MotionEvent[]): Room[] {
+  const groups = new Map<string, MotionEvent[]>();
+  for (const event of events) groups.set(event.device_id, [...(groups.get(event.device_id) ?? []), event]);
+  const demoDirectory = new Map(BLOCKS.flatMap((block) => ROOM_NAMES.map((room) => [roomId(block, room.name), { block, room }] as const)));
+
+  return [...groups.entries()].map(([id, readings]) => {
+    const ordered = [...readings].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    const latest = ordered[ordered.length - 1];
+    let stateSince = ordered[0].timestamp;
+    for (let index = 1; index < ordered.length; index += 1) {
+      if (ordered[index].motion_detected !== ordered[index - 1].motion_detected) stateSince = ordered[index].timestamp;
     }
+    const demo = demoDirectory.get(id);
+    return {
+      id,
+      name: demo?.room.name ?? titleCase(id),
+      type: demo?.room.type ?? "Room",
+      block: demo?.block ?? "Unassigned",
+      occupied: latest.motion_detected,
+      stateSince,
+      lastUpdated: latest.timestamp,
+      isDemo: Boolean(demo),
+    };
+  }).sort((a, b) => Number(a.occupied) - Number(b.occupied) || a.block.localeCompare(b.block) || a.name.localeCompare(b.name));
+}
 
-    refresh();
-    const timer = window.setInterval(refresh, 2_000);
-    return () => window.clearInterval(timer);
-  }, []);
+function RoomCard({ room, now }: { room: Room; now: number }) {
+  return <article className={`browse-room-card ${room.occupied ? "room-is-occupied" : "room-is-vacant"}`}>
+    <div className="browse-card-top"><span className="browse-block"><Icon name="building" size={14}/>Block {room.block}</span><span className={`browse-status ${room.occupied ? "status-occupied" : "status-vacant"}`}><i/>{room.occupied ? "Occupied" : "Vacant"}</span></div>
+    <h3>{room.name}</h3>
+    <span className="browse-room-type">{room.type}</span>
+    <div className="browse-state-time"><span>{room.occupied ? "Occupied since" : "Vacant since"}</span><strong>{localTime(room.stateSince)}</strong></div>
+    <div className="browse-room-bottom"><span>{room.isDemo ? "Sample room" : "Room sensor"}</span><span>Last updated {timeAgo(room.lastUpdated, now)}</span></div>
+  </article>;
+}
 
-  const latest = events[0];
-  return (
-    <main style={{ fontFamily: "system-ui", margin: "3rem auto", maxWidth: 720 }}>
-      <h1>Room Detector</h1>
-      <p>Polling every 2 seconds.</p>
-      {error ? <p role="alert">{error}</p> : null}
-      <h2>{latest?.motion_detected ? "Motion detected" : "No current motion"}</h2>
-      <p>{latest ? `${latest.device_id} · ${Math.round(latest.confidence * 100)}% confidence` : "Waiting for an ESP32 event…"}</p>
-      <h3>Recent events</h3>
-      <ol>
-        {events.map((event, index) => (
-          <li key={`${event.device_id}-${event.timestamp}-${index}`}>
-            {new Date(event.timestamp).toLocaleTimeString()} — {event.room_id ?? "unknown room"}: {event.motion_detected ? "motion" : "clear"}
-          </li>
-        ))}
-      </ol>
-    </main>
-  );
+export default function Home() {
+  const { events, error, lastUpdated, now } = useMotionEvents();
+  const [demoEvents, setDemoEvents] = useState<MotionEvent[]>([]);
+  const [query, setQuery] = useState("");
+  const [occupancy, setOccupancy] = useState<OccupancyFilter>("All rooms");
+  const [block, setBlock] = useState<BlockFilter>("All blocks");
+  useEffect(() => setDemoEvents(makeDemoEvents(Date.now())), []);
+  const rooms = useMemo(() => buildRooms([...events, ...demoEvents]), [events, demoEvents]);
+  const counts = useMemo(() => rooms.reduce((result, room) => {
+    result[room.occupied ? "Occupied" : "Vacant"] += 1;
+    return result;
+  }, { Vacant: 0, Occupied: 0 }), [rooms]);
+  const visibleRooms = rooms.filter((room) => {
+    const matchesOccupancy = occupancy === "All rooms" || (occupancy === "Occupied") === room.occupied;
+    const matchesBlock = block === "All blocks" || room.block === block;
+    const matchesQuery = `${room.name} ${room.type} ${room.block}`.toLowerCase().includes(query.toLowerCase());
+    return matchesOccupancy && matchesBlock && matchesQuery;
+  });
+  const filters: OccupancyFilter[] = ["All rooms", "Vacant", "Occupied"];
+
+  return <main className="customer-shell">
+    <header className="customer-header"><a className="customer-brand" href="#top"><span className="brand-mark"><span/><span/><span/><span/></span><span>roomwise</span></a><div className="customer-header-right"><span className="customer-live"><i/>DEMO DATA</span><span className="customer-date">{now ? new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(now) : ""}</span></div></header>
+    <section className="customer-main" id="top">
+      <div className="customer-heading"><div><div className="eyebrow">ROOM AVAILABILITY</div><h1>Find a room<span>.</span></h1><p>Search by room name, floor, or block to find an available space.</p></div><div className="customer-sync"><span className="sync-check"><i/></span><span>{lastUpdated ? `Room data updated ${timeAgo(lastUpdated.toISOString(), now)}` : "Connecting to room sensors…"}</span></div></div>
+      {error && <div className="error-banner" role="alert">Live sensor updates are unavailable. Showing sample room data.</div>}
+
+      <section className="customer-rooms-section"><div className="customer-section-heading"><div><h2>Browse rooms <span className="room-total">{visibleRooms.length}</span></h2><p>Vacancy time and the latest room update.</p></div></div>
+        <label className="room-search room-search-featured"><Icon name="search" size={19}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search rooms by name or floor…" aria-label="Search rooms by name or floor"/></label>
+        <div className="room-toolbar"><div className="room-filters" role="group" aria-label="Filter rooms by occupancy">{filters.map((item) => <button key={item} className={occupancy === item ? `selected ${item.toLowerCase().replace(" ", "-")}` : ""} onClick={() => setOccupancy(item)} aria-pressed={occupancy === item}>{item}<span>{item === "All rooms" ? rooms.length : counts[item]}</span></button>)}</div><label className="block-filter"><span>Block</span><select aria-label="Filter by block" value={block} onChange={(event) => setBlock(event.target.value as BlockFilter)}>{(["All blocks", ...BLOCKS] as BlockFilter[]).map((item) => <option key={item} value={item}>{item === "All blocks" ? item : `Block ${item}`}</option>)}</select></label></div>
+        {visibleRooms.length ? <div className="customer-room-grid">{visibleRooms.map((room) => <RoomCard key={room.id} room={room} now={now}/>)}</div> : <div className="customer-empty"><span className="empty-event-icon"><Icon name="building"/></span><strong>No rooms match that search</strong><span>Try a different room name, floor, block, or occupancy filter.</span></div>}
+      </section>
+      <footer className="customer-footer"><span>Roomwise <i>·</i> Private, camera-free room sensing</span><span>Times shown in your local timezone</span></footer>
+    </section>
+  </main>;
 }
