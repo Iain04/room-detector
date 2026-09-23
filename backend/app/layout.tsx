@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Roomwise — Room Overview",
-  description: "A live, clear view of your room occupancy and sensor activity.",
+  description: "A live, clear view of room occupancy and availability.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
