@@ -1,0 +1,9 @@
+# Secrets - never commit (each folder also has its own .gitignore)
+.env
+.env.local
+.env*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
