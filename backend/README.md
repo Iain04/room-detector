@@ -25,9 +25,9 @@ URL), then publish JSON to `MQTT_MOTION_EVENTS_TOPIC`, which defaults to
 `GET /api/motion-events?limit=10` remains the dashboard history endpoint.
 `POST /api/motion-events` now returns `410 Gone`.
 
-The backend ignores readings with `packet_rate < 50`. It waits for a
-three-minute, per-device window with at least 120 calibrated, reliable samples,
-then computes the median `baseline_diff`. It flags activity when the absolute
+The backend ignores readings with `packet_rate < 50`, removes duplicate
+timestamps, and uses a per-device 10-second window with at least 8 calibrated,
+reliable samples. It then computes the median `baseline_diff`. It flags activity when the absolute
 deviation from the empty-room reference exceeds
 `MOTION_BASELINE_DIFF_TOLERANCE`. The supplied study-room capture calibrated
 the reference median to `0.4115` and tolerance to `0.05`. Recalculate these
@@ -57,4 +57,4 @@ the lifetime of the server process. Stop the server after the empty-room run;
 the next server start creates a new CSV for the activity run. Set
 `MOTION_CSV_PATH=data/empty-room.csv` in `.env.local` only when you want an
 explicit filename. Capture files include raw telemetry, packet reliability,
-the three-minute decision, confidence, and rolling-window statistics.
+the 10-second decision, confidence, and rolling-window statistics.
