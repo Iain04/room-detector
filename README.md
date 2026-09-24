@@ -1,4 +1,4 @@
-# Room Detector
+# gotroom
 
 Wi-Fi room occupancy sensing for energy saving. An ESP32-S3 measures Wi-Fi
 Channel State Information (CSI), publishes 1-second motion telemetry over MQTT,
