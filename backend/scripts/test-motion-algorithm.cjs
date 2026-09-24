@@ -30,15 +30,15 @@ function publish(overrides = {}) {
   return addMotionEvent(event);
 }
 
-// The first three minutes are deliberately a warm-up period.
+// The first ten seconds are deliberately a warm-up period.
 const warmup = publish({ device_id: "warmup-devkit" });
 assert.equal(warmup.decision, "warming_up");
 assert.equal(warmup.motion_detected, false);
 
-// A three-minute window that differs materially from the empty-room baseline.
+// A cleaned ten-second window that differs materially from the empty-room baseline.
 let activeWindow;
 const start = 1790172000000;
-for (let second = 0; second <= 180; second += 1) {
+for (let second = 0; second <= 10; second += 1) {
   activeWindow = publish({
     device_id: "active-devkit",
     ts: start + second * 1000,
@@ -50,7 +50,21 @@ for (let second = 0; second <= 180; second += 1) {
 assert.equal(activeWindow.decision, "present");
 assert.equal(activeWindow.motion_detected, true);
 assert.ok(activeWindow.confidence > 0);
-assert.equal(activeWindow.window.reliable_sample_count, 181);
+assert.equal(activeWindow.window.reliable_sample_count, 11);
+
+// Once the last ten seconds return to the empty-room band, occupancy clears.
+let clearWindow;
+for (let second = 11; second <= 21; second += 1) {
+  clearWindow = publish({
+    device_id: "active-devkit",
+    ts: start + second * 1000,
+    motion_score: 1.1,
+    motion_excess: 0.1,
+    baseline_diff: 0.4115,
+  });
+}
+assert.equal(clearWindow.decision, "clear");
+assert.equal(clearWindow.motion_detected, false);
 
 // Low packet-rate data is stored as ignored and cannot trigger motion.
 const ignored = publish({

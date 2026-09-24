@@ -1,4 +1,4 @@
-/** Process-local event store and three-minute motion classifier. */
+/** Process-local event store and fast, cleaned-window motion classifier. */
 export type MotionDecision = "present" | "clear" | "ignored" | "warming_up";
 
 export type MotionWindow = {
@@ -92,6 +92,15 @@ function median(values: number[]) {
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
+function uniqueEventsByTimestamp(eventsToClean: MotionEvent[]) {
+  const seen = new Set<number>();
+  return eventsToClean.filter((event) => {
+    const timestamp = eventTimeMs(event);
+    if (seen.has(timestamp)) return false;
+    seen.add(timestamp);
+    return true;
+  });
+}
 
 /**
  * Classifies activity over the previous ten seconds for one device/room.
@@ -102,23 +111,28 @@ function applyRollingMotionDecision(current: MotionEvent) {
   if (current.motion_score === undefined || !current.reliable) return;
 
   const end = eventTimeMs(current);
-  const windowEvents = events.filter((event) =>
+  // Clean the live window before calculating: same sensor/room only, one
+  // reading per timestamp, and only calibrated reliable baseline readings.
+  const windowEvents = uniqueEventsByTimestamp(events.filter((event) =>
     event.device_id === current.device_id &&
     event.room_id === current.room_id &&
     event.motion_score !== undefined &&
     eventTimeMs(event) >= end - WINDOW_MS && eventTimeMs(event) <= end,
-  );
+  ));
   const reliableEvents = windowEvents.filter((event) => event.reliable);
-  const timestamps = windowEvents.map(eventTimeMs);
+  const calibratedBaselineEvents = reliableEvents.filter(
+    (event) => event.calibrated && event.baseline_diff !== undefined && Number.isFinite(event.baseline_diff),
+  );
+  const timestamps = calibratedBaselineEvents.map(eventTimeMs);
   const durationMs = timestamps.length ? end - Math.min(...timestamps) : 0;
   const baseWindow: MotionWindow = {
     duration_ms: Math.max(0, durationMs),
     sample_count: windowEvents.length,
     reliable_sample_count: reliableEvents.length,
-    calibrated_sample_count: reliableEvents.filter((event) => event.calibrated).length,
+    calibrated_sample_count: calibratedBaselineEvents.length,
   };
 
-  if (durationMs < WINDOW_MS || reliableEvents.length < MIN_RELIABLE_SAMPLES) {
+  if (durationMs < WINDOW_MS || calibratedBaselineEvents.length < MIN_RELIABLE_SAMPLES) {
     current.motion_detected = false;
     current.confidence = 0;
     current.decision = "warming_up";
@@ -126,23 +140,14 @@ function applyRollingMotionDecision(current: MotionEvent) {
     return;
   }
 
-  const calibratedBaselineDiffs = reliableEvents
-    .filter((event) => event.calibrated && event.baseline_diff !== undefined)
-    .map((event) => event.baseline_diff!);
-  if (calibratedBaselineDiffs.length < MIN_RELIABLE_SAMPLES) {
-    current.motion_detected = false;
-    current.confidence = 0;
-    current.decision = "warming_up";
-    current.window = baseWindow;
-    return;
-  }
+  const calibratedBaselineDiffs = calibratedBaselineEvents.map((event) => event.baseline_diff!);
 
   const emptyRoomMedian = baselineMedian();
   const tolerance = baselineTolerance();
   const windowMedian = median(calibratedBaselineDiffs);
   const deviation = Math.abs(windowMedian - emptyRoomMedian);
   const motionDetected = deviation > tolerance;
-  const coverage = clamp(reliableEvents.length / WINDOW_MS * 1_000);
+  const coverage = clamp(calibratedBaselineEvents.length / (WINDOW_MS / 1_000));
   const confidence = clamp(0.5 + (deviation - tolerance) / (2 * tolerance)) * coverage;
 
   current.motion_detected = motionDetected;

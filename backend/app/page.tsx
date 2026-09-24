@@ -5,6 +5,12 @@ import { useMotionEvents } from "./use-motion-events";
 import type { MotionEvent } from "./use-motion-events";
 
 const BLOCKS = ["55", "57", "59"] as const;
+// Temporary sensor visualisation. Set false (or remove SensorDebugChart) once testing is complete.
+const DEBUG_SENSOR_CHART = true;
+const EMPTY_ROOM_REFERENCE = 0.4115;
+const MOTION_TOLERANCE = 0.0515;
+const VACANT_LOWER_BOUND = EMPTY_ROOM_REFERENCE - MOTION_TOLERANCE;
+const VACANT_UPPER_BOUND = EMPTY_ROOM_REFERENCE + MOTION_TOLERANCE;
 const ROOM_SPECS = [
   { name: "Level 2 Meeting Room", type: "Meeting room", floor: 2, seed: 34 },
   { name: "Level 2 Study Room", type: "Study room", floor: 2, seed: 18 },
@@ -112,8 +118,42 @@ function RoomCard({ room }: { room: RoomCardModel }) {
     <div className="browse-card-top"><span className="browse-block"><Icon name="building" size={14}/>Block {room.block}</span><StatusPill status={room.status}/></div>
     <h3>{room.room}</h3>
     <span className="browse-room-type">{room.roomType}</span>
-    <div className="browse-state-time"><span>{sinceLabel}</span><strong>{room.timestamp}</strong></div>
+    <div className="browse-state-time"><span>{sinceLabel}</span><strong suppressHydrationWarning>{room.timestamp}</strong></div>
   </article>;
+}
+
+function SensorDebugChart({ events }: { events: MotionEvent[] }) {
+  const data = [...events]
+    .filter((event) => typeof event.baseline_diff === "number" && Number.isFinite(event.baseline_diff))
+    .reverse()
+    .slice(-60);
+  if (data.length < 2) return <section className="debug-sensor-chart" aria-label="Temporary sensor signal visualisation">
+    <div className="debug-sensor-heading"><div><span>TESTING ONLY</span><h2>Live baseline-difference signal</h2><p>Waiting for at least two calibrated MQTT sensor readings before drawing the chart.</p></div><strong className="debug-pending">WAITING</strong></div>
+  </section>;
+
+  const width = 760;
+  const height = 190;
+  const padding = { top: 20, right: 16, bottom: 28, left: 42 };
+  const values = data.map((event) => event.baseline_diff!);
+  const lower = Math.max(0, Math.min(...values, VACANT_LOWER_BOUND) - 0.03);
+  const upper = Math.max(...values, VACANT_UPPER_BOUND) + 0.03;
+  const x = (index: number) => padding.left + index * (width - padding.left - padding.right) / (data.length - 1);
+  const y = (value: number) => padding.top + (upper - value) * (height - padding.top - padding.bottom) / (upper - lower);
+  const line = data.map((event, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)},${y(event.baseline_diff!).toFixed(1)}`).join(" ");
+  const latest = data.at(-1)!;
+
+  return <section className="debug-sensor-chart" aria-label="Temporary sensor signal visualisation">
+    <div className="debug-sensor-heading"><div><span>TESTING ONLY</span><h2>Live baseline-difference signal</h2><p>Green band = vacant. Crossing outside either red threshold = occupied.</p></div><strong className={latest.motion_detected ? "debug-motion" : "debug-clear"}>{latest.motion_detected ? "MOTION" : "CLEAR"}</strong></div>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Baseline difference over recent sensor readings">
+      <rect x={padding.left} y={y(VACANT_UPPER_BOUND)} width={width - padding.left - padding.right} height={y(VACANT_LOWER_BOUND) - y(VACANT_UPPER_BOUND)} className="debug-band"/>
+      {[lower, (lower + upper) / 2, upper].map((value) => <g key={value}><line x1={padding.left} x2={width - padding.right} y1={y(value)} y2={y(value)} className="debug-grid"/><text x={padding.left - 7} y={y(value) + 3} textAnchor="end">{value.toFixed(2)}</text></g>)}
+      {[VACANT_LOWER_BOUND, VACANT_UPPER_BOUND].map((value) => <g key={value}><line x1={padding.left} x2={width - padding.right} y1={y(value)} y2={y(value)} className="debug-threshold"/><text x={width - padding.right} y={y(value) - 4} textAnchor="end" className="debug-threshold-label">{value.toFixed(3)} threshold</text></g>)}
+      <line x1={padding.left} x2={width - padding.right} y1={y(EMPTY_ROOM_REFERENCE)} y2={y(EMPTY_ROOM_REFERENCE)} className="debug-reference"/>
+      <path d={line} className="debug-line"/>
+      <circle cx={x(data.length - 1)} cy={y(latest.baseline_diff!)} r="4" className={latest.motion_detected ? "debug-dot-motion" : "debug-dot-clear"}/>
+      <text x={padding.left} y={height - 8}>oldest</text><text x={width - padding.right} y={height - 8} textAnchor="end">latest</text>
+    </svg>
+  </section>;
 }
 
 export default function Home() {
@@ -150,7 +190,10 @@ export default function Home() {
       // Older room IDs often omit their block; use Block 55 as the single live target.
       const liveBlock = location.block ?? "55";
       const key = roomKey(liveBlock, location.floor, location.type);
-      matched.set(key, event);
+      // Once a sensor has produced a stable decision, do not replace the room
+      // card with a later warming_up/ignored event after a backend restart.
+      const isStable = event.decision === "present" || event.decision === "clear";
+      if (isStable || !matched.has(key)) matched.set(key, event);
     }
     return matched;
   }, [events]);
@@ -186,6 +229,7 @@ export default function Home() {
     <section className="customer-main connection-main" id="top">
       <div className="customer-heading"><div><div className="eyebrow">ROOM AVAILABILITY</div><h1>Find a room<span>.</span></h1><p>Search by room name, floor, or block to find an available space.</p></div><div className="customer-sync"><span className="sync-check"><i/></span><span>{lastUpdated && now ? `Synced ${new Date(lastUpdated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Updating room data…"}</span></div></div>
       {error && <div className="error-banner" role="alert">Live sensor updates are unavailable. Sample occupancy remains visible.</div>}
+      {DEBUG_SENSOR_CHART && <SensorDebugChart events={events}/>}
 
       <section className="customer-rooms-section"><div className="customer-section-heading"><div><h2>Browse rooms <span className="room-total">{visibleRooms.length}</span></h2><p>Live sensor rooms update automatically; remaining rooms show sample occupancy.</p></div></div>
         <label className="room-search room-search-featured"><Icon name="search" size={19}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search rooms by name or floor…" aria-label="Search rooms by name or floor"/></label>

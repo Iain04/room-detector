@@ -14,6 +14,8 @@ export type MotionEvent = {
   calibrated?: boolean;
   motion_score?: number;
   motion_excess?: number | null;
+  motion_max?: number;
+  baseline_diff?: number;
   packet_rate?: number;
   window?: {
     duration_ms: number;
@@ -35,7 +37,7 @@ export function useMotionEvents() {
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch("/api/motion-events?limit=10", {
+      const response = await fetch("/api/motion-events?limit=60", {
         cache: "no-store",
         signal,
       });

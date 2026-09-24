@@ -1,0 +1,5 @@
+{
+  "/api/motion-events/route": "app/api/motion-events/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js"
+}
