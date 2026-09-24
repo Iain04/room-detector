@@ -24,9 +24,6 @@ type RoomCardModel = {
   roomType: string;
   status: DisplayStatus;
   timestamp: string;
-  rawTimestamp: string;
-  deviceId?: string;
-  isLive: boolean;
 };
 
 function Icon({ name, size = 18 }: { name: "search" | "building" | "clock"; size?: number }) {
@@ -34,6 +31,17 @@ function Icon({ name, size = 18 }: { name: "search" | "building" | "clock"; size
   if (name === "search") return <svg {...common}><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg>;
   if (name === "building") return <svg {...common}><path d="M4 21h16M6 21V5l6-2 6 2v16M9 8h.01M15 8h.01M9 12h.01M15 12h.01M10 21v-5h4v5"/></svg>;
   return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>;
+}
+
+function GetroomMark() {
+  return <svg className="getroom-mark" viewBox="0 0 52 58" aria-hidden="true">
+    <g fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="6">
+      <path d="M25 17c-8 0-13 5-13 12s5 12 13 12 13-5 13-12-5-12-13-12Z"/>
+      <path d="M38 17v26c0 8-5 12-13 12-6 0-10-2-13-5"/>
+      <path d="M38 30v-6c0-6 4-9 10-9"/>
+    </g>
+    <circle cx="38" cy="41" r="3.5" fill="var(--getroom-teal)"/>
+  </svg>;
 }
 
 function roomKey(block: string, floor: number, type: string) {
@@ -79,15 +87,6 @@ function localTime(timestamp: string) {
   return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
 }
 
-function timeAgo(timestamp: string, now: number) {
-  const seconds = Math.max(0, Math.floor((now - Date.parse(timestamp)) / 1_000));
-  if (seconds < 10) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3_600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3_600)}h ago`;
-  return `${Math.floor(seconds / 86_400)}d ago`;
-}
-
 function createFakeRoom(block: string, spec: (typeof ROOM_SPECS)[number], roomIndex: number, blockIndex: number, now: number): RoomCardModel {
   const occupied = (roomIndex + blockIndex) % 3 === 1;
   const changedAt = new Date(now - (spec.seed + blockIndex * 7) * 60_000).toISOString();
@@ -98,8 +97,6 @@ function createFakeRoom(block: string, spec: (typeof ROOM_SPECS)[number], roomIn
     roomType: spec.type,
     status: occupied ? "Motion detected" : "No motion",
     timestamp: localTime(changedAt),
-    rawTimestamp: changedAt,
-    isLive: false,
   };
 }
 
@@ -111,9 +108,6 @@ function createLiveRoom(event: MotionEvent, location: { block?: string; floor: n
     roomType: location.type,
     status: getStatus(event),
     timestamp: localTime(event.timestamp),
-    rawTimestamp: event.timestamp,
-    deviceId: event.device_id,
-    isLive: true,
   };
 }
 
@@ -121,7 +115,7 @@ function StatusPill({ status }: { status: DisplayStatus }) {
   return <span className={`browse-status ${statusClass(status)}`}><i/>{status === "Motion detected" ? "Occupied" : status === "No motion" ? "Vacant" : status}</span>;
 }
 
-function RoomCard({ room, now }: { room: RoomCardModel; now: number }) {
+function RoomCard({ room }: { room: RoomCardModel }) {
   const occupied = room.status === "Motion detected";
   const vacant = room.status === "No motion";
   const sinceLabel = occupied ? "Occupied since" : vacant ? "Vacant since" : "Status updated";
@@ -130,7 +124,6 @@ function RoomCard({ room, now }: { room: RoomCardModel; now: number }) {
     <h3>{room.room}</h3>
     <span className="browse-room-type">{room.roomType}</span>
     <div className="browse-state-time"><span>{sinceLabel}</span><strong>{room.timestamp}</strong></div>
-    <div className="browse-room-bottom"><span>{room.isLive ? `Live · ${room.deviceId ?? "Sensor"}` : "Sample occupancy"}</span><span>Last updated {timeAgo(room.rawTimestamp, now)}</span></div>
   </article>;
 }
 
@@ -182,7 +175,7 @@ export default function Home() {
   const filters: OccupancyFilter[] = ["All rooms", "Vacant", "Occupied"];
 
   return <main className="customer-shell">
-    <header className="customer-header"><a className="customer-brand" href="#top"><span className="brand-mark"><span/><span/><span/><span/></span><span>roomwise</span></a><div className="customer-header-right"><span className="customer-live"><i/>LIVE UPDATES</span><span className="customer-date">{now ? new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(now) : ""}</span></div></header>
+    <header className="customer-header"><a className="customer-brand" href="#top"><GetroomMark/><span>getroom</span></a><div className="customer-header-right"><span className="customer-live"><i/>LIVE UPDATES</span><span className="customer-date">{now ? new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(now) : ""}</span></div></header>
     <section className="customer-main connection-main" id="top">
       <div className="customer-heading"><div><div className="eyebrow">ROOM AVAILABILITY</div><h1>Find a room<span>.</span></h1><p>Search by room name, floor, or block to find an available space.</p></div><div className="customer-sync"><span className="sync-check"><i/></span><span>{lastUpdated && now ? `Synced ${new Date(lastUpdated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}` : "Updating room data…"}</span></div></div>
       {error && <div className="error-banner" role="alert">Live sensor updates are unavailable. Sample occupancy remains visible.</div>}
@@ -190,10 +183,10 @@ export default function Home() {
       <section className="customer-rooms-section"><div className="customer-section-heading"><div><h2>Browse rooms <span className="room-total">{visibleRooms.length}</span></h2><p>Live sensor rooms update automatically; remaining rooms show sample occupancy.</p></div></div>
         <label className="room-search room-search-featured"><Icon name="search" size={19}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search rooms by name or floor…" aria-label="Search rooms by name or floor"/></label>
         <div className="room-toolbar"><div className="room-filters" role="group" aria-label="Filter rooms by occupancy">{filters.map((item) => <button key={item} className={occupancy === item ? `selected ${item.toLowerCase().replace(" ", "-")}` : ""} onClick={() => setOccupancy(item)} aria-pressed={occupancy === item}>{item}<span>{item === "All rooms" ? rooms.length : counts[item]}</span></button>)}</div><label className="block-filter"><span>Block</span><select aria-label="Filter by block" value={block} onChange={(event) => setBlock(event.target.value as BlockFilter)}>{(["All blocks", ...BLOCKS] as BlockFilter[]).map((item) => <option key={item} value={item}>{item === "All blocks" ? item : `Block ${item}`}</option>)}</select></label></div>
-        {visibleRooms.length ? <div className="customer-room-grid">{visibleRooms.map((room) => <RoomCard key={room.key} room={room} now={now}/>)}</div> : <div className="customer-empty"><span className="empty-event-icon"><Icon name="building"/></span><strong>No rooms match that search</strong><span>Try another room name, floor, block, or occupancy filter.</span></div>}
+        {visibleRooms.length ? <div className="customer-room-grid">{visibleRooms.map((room) => <RoomCard key={room.key} room={room}/>)}</div> : <div className="customer-empty"><span className="empty-event-icon"><Icon name="building"/></span><strong>No rooms match that search</strong><span>Try another room name, floor, block, or occupancy filter.</span></div>}
       </section>
       {currentEvent && <p className="latest-event-note">Latest backend event: {currentEvent.device_id} · {localTime(currentEvent.timestamp)}</p>}
-      <footer className="customer-footer"><span>Roomwise <i>·</i> Camera-free room sensing</span><span>Times shown in your local timezone</span></footer>
+      <footer className="customer-footer"><span>getroom <i>·</i> Camera-free room sensing</span><span>Times shown in your local timezone</span></footer>
     </section>
   </main>;
 }

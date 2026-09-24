@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Roomwise — Room Overview",
-  description: "A live, clear view of room occupancy and availability.",
+  title: "getroom — Room availability",
+  description: "Check room occupancy and availability at a glance.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

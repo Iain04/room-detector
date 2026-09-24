@@ -31,3 +31,43 @@
 .connection-main{max-width:920px;padding-top:48px}.connection-main .customer-heading{margin-bottom:25px}.connection-main .customer-heading h1{font-size:31px}.connection-current{border:1px solid #e7ebe5;border-radius:14px;background:#fff;padding:20px 22px 15px;box-shadow:0 5px 20px #21321a08}.connection-current-top{display:flex;align-items:center;justify-content:space-between}.connection-kicker{color:#879187;font-size:9px;font-weight:700;letter-spacing:1px}.connection-status{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:20px;font-size:9px;font-weight:700}.connection-status i{width:6px;height:6px;border-radius:50%;background:currentColor}.connection-status.clear{color:#55853a;background:#eff7e9}.connection-status.motion{color:#c15c4c;background:#fcf0ed}.connection-status.calibrating{color:#927836;background:#f8f3e6}.connection-status.unreliable{color:#6f7e8a;background:#eff3f5}.connection-current-content{display:flex;align-items:center;gap:17px;padding:24px 0 20px}.connection-status-icon{width:58px;height:58px;flex:0 0 auto;border-radius:15px;display:grid;place-items:center}.connection-status-icon svg{width:29px;height:29px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.connection-current.clear .connection-status-icon{color:#649748;background:#f0f7eb}.connection-current.motion .connection-status-icon{color:#cf6a58;background:#fcf1ee}.connection-current.calibrating .connection-status-icon{color:#a0884b;background:#faf5e8}.connection-current.unreliable .connection-status-icon{color:#72838c;background:#f1f4f5}.connection-room-heading{min-width:0}.connection-room-label{font-size:11px;color:#7f8b80}.connection-room-heading h2{font-family:Manrope,sans-serif;font-size:25px;letter-spacing:-.65px;color:#203027;margin:4px 0 5px}.connection-room-heading p{font-size:10px;color:#939c93;margin:0}.connection-room-heading p time{font-weight:600;color:#59665b}.connection-current-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;border-top:1px solid #edf0eb;color:#929b92;font-size:9px}.connection-current-footer code{font-size:9px;color:#637064;background:#f4f6f2;border-radius:4px;padding:3px 5px}.connection-current-footer strong{font-size:10px;color:#596c53}.confidence-pending{color:#a18d57}.connection-history{margin-top:22px;border:1px solid #e7ebe5;border-radius:12px;background:#fff;padding:18px 20px}.connection-history-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.connection-history-heading h2{font-family:Manrope,sans-serif;font-size:14px;margin:0;color:#27352b}.connection-history-heading p{font-size:9px;color:#929b92;margin:4px 0 0}.history-count{padding:5px 8px;border-radius:15px;background:#f2f4f0;color:#788278;font-size:8px}.connection-history ol{list-style:none;padding:0;margin:0}.connection-event-row{min-height:49px;display:flex;align-items:center;gap:10px;border-top:1px solid #f0f2ee}.connection-event-icon{width:27px;height:27px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center}.connection-event-icon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.connection-event-icon.clear{color:#639448;background:#f0f7eb}.connection-event-icon.motion{color:#c66553;background:#fcf0ed}.connection-event-icon.calibrating{color:#9a8241;background:#f8f3e6}.connection-event-icon.unreliable{color:#71828b;background:#eff3f5}.connection-event-copy{min-width:0;display:grid;gap:3px}.connection-event-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#445246;font-size:9px;font-weight:600}.connection-event-copy span{color:#929b92;font-size:8px}.connection-event-row time{margin-left:auto;flex:0 0 auto;color:#758075;font-size:9px;font-variant-numeric:tabular-nums}.connection-empty{min-height:275px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:1px dashed #dce4d9;border-radius:13px;background:#fbfcfa}.connection-empty-icon{width:48px;height:48px;border-radius:14px;background:#f8f3e6;color:#957f42;display:grid;place-items:center}.connection-empty-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.connection-empty h2{font-family:Manrope,sans-serif;font-size:16px;color:#344137;margin:14px 0 6px}.connection-empty p{font-size:10px;color:#929b92;margin:0 0 15px}.connection-empty .customer-live{font-size:8px}.connection-main .customer-footer{margin-top:20px}
 @media(max-width:600px){.connection-main{padding-top:28px}.connection-main .customer-heading{gap:8px;margin-bottom:19px}.connection-main .customer-heading h1{font-size:26px}.connection-main .customer-heading p{font-size:9px;line-height:1.5}.connection-main .customer-sync{font-size:8px}.connection-current{padding:15px 14px 12px}.connection-current-content{gap:12px;padding:21px 0 17px}.connection-status-icon{width:47px;height:47px;border-radius:13px}.connection-status-icon svg{width:24px;height:24px}.connection-room-heading h2{font-size:21px}.connection-room-label{font-size:9px}.connection-room-heading p{font-size:9px}.connection-current-footer{font-size:8px}.connection-current-footer code{font-size:8px}.connection-history{margin-top:13px;padding:14px 13px}.connection-history-heading h2{font-size:13px}.connection-event-row{gap:8px;min-height:47px}.connection-event-row time{font-size:8px}.connection-empty{min-height:250px;padding:20px}.customer-footer{gap:12px}.customer-footer span:last-child{max-width:42%}}
 .browse-status.calibrating{color:#927836;background:#f8f3e6}.browse-status.unreliable{color:#6f7e8a;background:#eff3f5}.browse-room-card.room-state-pending{border-color:#ece8da}.latest-event-note{margin:15px 0 0;color:#929b92;font-size:8px;text-align:right}
+.browse-status.clear{color:#528139;background:#edf7e7}.browse-status.motion{color:#bd5948;background:#fff0ed}
+
+/* getroom identity: navy wordmark with a restrained teal accent. */
+:root{--getroom-navy:#202b47;--getroom-teal:#24a995}
+.customer-shell{background:#f5f7f8;color:var(--getroom-navy);font-family:Arial,Helvetica,sans-serif}
+.customer-header{background:#fff;border-bottom-color:#e3e7eb}
+.customer-brand{gap:9px;color:var(--getroom-navy);font-family:Arial,Helvetica,sans-serif;font-size:21px;font-weight:700;letter-spacing:-.75px}
+.getroom-mark{display:block;width:32px;height:36px;flex:0 0 auto;color:var(--getroom-navy)}
+.customer-live{padding:6px 9px;border:1px solid #dceeea;border-radius:5px;background:#f0f8f6;color:#267a70;font-size:9px;letter-spacing:.25px}
+.customer-live i{background:var(--getroom-teal);box-shadow:none}
+.customer-heading h1,.customer-section-heading h2,.browse-room-card h3{font-family:Arial,Helvetica,sans-serif;color:var(--getroom-navy);letter-spacing:-.5px}
+.customer-heading h1 span{color:var(--getroom-teal)}
+.eyebrow{color:#53736f}
+.customer-sync .sync-check i{background:var(--getroom-teal)}
+.room-total{background:#e4f3f0;color:#27796f}
+.room-search-featured{border-color:#dce3e7;border-radius:7px;box-shadow:none}
+.room-search-featured:focus-within{border-color:#66bbae;box-shadow:0 0 0 2px #24a9951c}
+.room-filters button{border-radius:5px}
+.room-filters button.selected{color:var(--getroom-navy);background:#eaf0f2;border-color:#d9e2e6}
+.room-filters button.selected.vacant{color:#19796d;background:#e5f4f1;border-color:#cce8e2}
+.room-filters button.selected.occupied{color:#a2473e;background:#f9ecea;border-color:#f0d8d5}
+.block-filter select{border-radius:5px}
+.browse-room-card{border-color:#e0e5e8;border-radius:8px;box-shadow:none;transition:border-color .15s}
+.browse-room-card:hover{transform:none;border-color:#b9d8d3;box-shadow:0 2px 8px #202b4708}
+.browse-block{color:#677583}
+.browse-room-card h3{font-size:16px;font-weight:600}
+.browse-room-type{color:#77838f}
+.browse-state-time{border-top-color:#e8ecee;color:#677583}
+.browse-state-time strong{font-family:Arial,Helvetica,sans-serif;color:var(--getroom-navy)}
+.room-is-vacant .browse-state-time strong{color:#19796d}
+.room-is-occupied .browse-state-time strong{color:#ad4b40}
+.browse-status{border-radius:5px;font-size:9px;font-weight:600}
+.browse-status.clear{color:#18766b;background:#e4f4f0}
+.browse-status.motion{color:#a9443b;background:#faeae8}
+.browse-status.calibrating{color:#856914;background:#fbf3d9}
+.browse-status.unreliable{color:#5f6d78;background:#edf1f3}
+.room-state-pending{border-color:#e9dfbd}
+.customer-footer span:first-child{color:var(--getroom-navy);font-weight:600}
+.customer-footer span:last-child{color:#7b8791}
+@media(max-width:600px){.customer-brand{font-size:19px}.getroom-mark{width:29px;height:33px}}
