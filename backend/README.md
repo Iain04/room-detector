@@ -1,4 +1,4 @@
-# Room Detector
+# gotroom
 
 WiFi CSI/RSSI motion detection prototype. The ESP32 publishes motion events to
 MQTT; the Next.js app subscribes, keeps a small in-memory history, and shows it

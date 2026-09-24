@@ -33,17 +33,6 @@ function Icon({ name, size = 18 }: { name: "search" | "building" | "clock"; size
   return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>;
 }
 
-function GetroomMark() {
-  return <svg className="getroom-mark" viewBox="0 0 52 58" aria-hidden="true">
-    <g fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="6">
-      <path d="M25 17c-8 0-13 5-13 12s5 12 13 12 13-5 13-12-5-12-13-12Z"/>
-      <path d="M38 17v26c0 8-5 12-13 12-6 0-10-2-13-5"/>
-      <path d="M38 30v-6c0-6 4-9 10-9"/>
-    </g>
-    <circle cx="38" cy="41" r="3.5" fill="var(--getroom-teal)"/>
-  </svg>;
-}
-
 function roomKey(block: string, floor: number, type: string) {
   return `${block}|${floor}|${type.toLowerCase()}`;
 }
@@ -84,7 +73,7 @@ function statusClass(status: DisplayStatus) {
 
 function localTime(timestamp: string) {
   const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function createFakeRoom(block: string, spec: (typeof ROOM_SPECS)[number], roomIndex: number, blockIndex: number, now: number): RoomCardModel {
@@ -137,7 +126,7 @@ export default function Home() {
   useEffect(() => setSampleNow(Date.now()), []);
   useEffect(() => {
     try {
-      if (window.localStorage.getItem("getroom-theme") === "dark") setTheme("dark");
+      if (window.localStorage.getItem("gotroom-theme") === "dark") setTheme("dark");
     } catch {
       // The switch still works for this visit if browser storage is unavailable.
     }
@@ -147,7 +136,7 @@ export default function Home() {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
     try {
-      window.localStorage.setItem("getroom-theme", nextTheme);
+      window.localStorage.setItem("gotroom-theme", nextTheme);
     } catch {
       // Keep the selected theme for this visit if browser storage is unavailable.
     }
@@ -193,9 +182,9 @@ export default function Home() {
   const filters: OccupancyFilter[] = ["All rooms", "Vacant", "Occupied"];
 
   return <main className="customer-shell" data-theme={theme}>
-    <header className="customer-header"><a className="customer-brand" href="#top"><GetroomMark/><span>getroom</span></a><div className="customer-header-right"><span className="customer-live"><i/>LIVE UPDATES</span><span className="customer-date">{now ? new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(now) : ""}</span><button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>{theme === "dark" ? <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.4A8.5 8.5 0 0 1 8.6 3.8 8.7 8.7 0 1 0 20.2 15.4Z"/></svg>}</button></div></header>
+    <header className="customer-header"><a className="customer-brand" href="#top"><img className="gotroom-brand-mark" src={theme === "dark" ? "/gotroom-mark-dark.png" : "/gotroom-mark-light.png"} alt="" aria-hidden="true"/><span>got room<span className="brand-question">?</span></span></a><div className="customer-header-right"><span className="customer-live"><i/>LIVE UPDATES</span><span className="customer-date">{now ? new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(now) : ""}</span><button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>{theme === "dark" ? <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.4A8.5 8.5 0 0 1 8.6 3.8 8.7 8.7 0 1 0 20.2 15.4Z"/></svg>}</button></div></header>
     <section className="customer-main connection-main" id="top">
-      <div className="customer-heading"><div><div className="eyebrow">ROOM AVAILABILITY</div><h1>Find a room<span>.</span></h1><p>Search by room name, floor, or block to find an available space.</p></div><div className="customer-sync"><span className="sync-check"><i/></span><span>{lastUpdated && now ? `Synced ${new Date(lastUpdated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}` : "Updating room data…"}</span></div></div>
+      <div className="customer-heading"><div><div className="eyebrow">ROOM AVAILABILITY</div><h1>Find a room<span>.</span></h1><p>Search by room name, floor, or block to find an available space.</p></div><div className="customer-sync"><span className="sync-check"><i/></span><span>{lastUpdated && now ? `Synced ${new Date(lastUpdated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Updating room data…"}</span></div></div>
       {error && <div className="error-banner" role="alert">Live sensor updates are unavailable. Sample occupancy remains visible.</div>}
 
       <section className="customer-rooms-section"><div className="customer-section-heading"><div><h2>Browse rooms <span className="room-total">{visibleRooms.length}</span></h2><p>Live sensor rooms update automatically; remaining rooms show sample occupancy.</p></div></div>
@@ -204,7 +193,7 @@ export default function Home() {
         {visibleRooms.length ? <div className="customer-room-grid">{visibleRooms.map((room) => <RoomCard key={room.key} room={room}/>)}</div> : <div className="customer-empty"><span className="empty-event-icon"><Icon name="building"/></span><strong>No rooms match that search</strong><span>Try another room name, floor, block, or occupancy filter.</span></div>}
       </section>
       {currentEvent && <p className="latest-event-note">Latest backend event: {currentEvent.device_id} · {localTime(currentEvent.timestamp)}</p>}
-      <footer className="customer-footer"><span>getroom <i>·</i> Camera-free room sensing</span><span>Times shown in your local timezone</span></footer>
+      <footer className="customer-footer"><span>got room? <i>·</i> Camera-free room sensing</span><span>Times shown in your local timezone</span></footer>
     </section>
   </main>;
 }

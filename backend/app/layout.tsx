@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "getroom — Room availability",
+  title: "got room? — Room availability",
   description: "Check room occupancy and availability at a glance.",
 };
 

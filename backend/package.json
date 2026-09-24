@@ -1,5 +1,5 @@
 {
-  "name": "room-detector",
+  "name": "gotroom",
   "private": true,
   "scripts": {
     "dev": "next dev",
