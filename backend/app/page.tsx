@@ -132,8 +132,26 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [occupancy, setOccupancy] = useState<OccupancyFilter>("All rooms");
   const [block, setBlock] = useState<BlockFilter>("All blocks");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [sampleNow, setSampleNow] = useState(0);
   useEffect(() => setSampleNow(Date.now()), []);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("getroom-theme") === "dark") setTheme("dark");
+    } catch {
+      // The switch still works for this visit if browser storage is unavailable.
+    }
+  }, []);
+
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    try {
+      window.localStorage.setItem("getroom-theme", nextTheme);
+    } catch {
+      // Keep the selected theme for this visit if browser storage is unavailable.
+    }
+  }
 
   const liveByRoom = useMemo(() => {
     const matched = new Map<string, MotionEvent>();
@@ -174,8 +192,8 @@ export default function Home() {
   const currentEvent = events[0];
   const filters: OccupancyFilter[] = ["All rooms", "Vacant", "Occupied"];
 
-  return <main className="customer-shell">
-    <header className="customer-header"><a className="customer-brand" href="#top"><GetroomMark/><span>getroom</span></a><div className="customer-header-right"><span className="customer-live"><i/>LIVE UPDATES</span><span className="customer-date">{now ? new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(now) : ""}</span></div></header>
+  return <main className="customer-shell" data-theme={theme}>
+    <header className="customer-header"><a className="customer-brand" href="#top"><GetroomMark/><span>getroom</span></a><div className="customer-header-right"><span className="customer-live"><i/>LIVE UPDATES</span><span className="customer-date">{now ? new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(now) : ""}</span><button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>{theme === "dark" ? <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.4A8.5 8.5 0 0 1 8.6 3.8 8.7 8.7 0 1 0 20.2 15.4Z"/></svg>}</button></div></header>
     <section className="customer-main connection-main" id="top">
       <div className="customer-heading"><div><div className="eyebrow">ROOM AVAILABILITY</div><h1>Find a room<span>.</span></h1><p>Search by room name, floor, or block to find an available space.</p></div><div className="customer-sync"><span className="sync-check"><i/></span><span>{lastUpdated && now ? `Synced ${new Date(lastUpdated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}` : "Updating room data…"}</span></div></div>
       {error && <div className="error-banner" role="alert">Live sensor updates are unavailable. Sample occupancy remains visible.</div>}
