@@ -60,7 +60,7 @@ for (let second = 11; second <= 21; second += 1) {
     ts: start + second * 1000,
     motion_score: 1.1,
     motion_excess: 0.1,
-    baseline_diff: 0.4115,
+    baseline_diff: 0.348,
   });
 }
 assert.equal(clearWindow.decision, "clear");

@@ -7,8 +7,8 @@ import type { MotionEvent } from "./use-motion-events";
 const BLOCKS = ["55", "57", "59"] as const;
 // Temporary sensor visualisation. Set false (or remove SensorDebugChart) once testing is complete.
 const DEBUG_SENSOR_CHART = true;
-const EMPTY_ROOM_REFERENCE = 0.4115;
-const MOTION_TOLERANCE = 0.0515;
+const EMPTY_ROOM_REFERENCE = 0.348;
+const MOTION_TOLERANCE = 0.074;
 const VACANT_LOWER_BOUND = EMPTY_ROOM_REFERENCE - MOTION_TOLERANCE;
 const VACANT_UPPER_BOUND = EMPTY_ROOM_REFERENCE + MOTION_TOLERANCE;
 const ROOM_SPECS = [

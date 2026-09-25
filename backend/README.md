@@ -29,8 +29,8 @@ The backend ignores readings with `packet_rate < 50`, removes duplicate
 timestamps, and uses a per-device 10-second window with at least 8 calibrated,
 reliable samples. It then computes the median `baseline_diff`. It flags activity when the absolute
 deviation from the empty-room reference exceeds
-`MOTION_BASELINE_DIFF_TOLERANCE`. The supplied study-room capture calibrated
-the reference median to `0.4115` and tolerance to `0.05`. Recalculate these
+`MOTION_BASELINE_DIFF_TOLERANCE`. The latest labelled study-room captures
+calibrated the reference median to `0.348` and tolerance to `0.074`. Recalculate these
 values from a fresh empty-room capture whenever the room or device placement
 changes. RSSI is retained for diagnostics but is not used for detection.
 

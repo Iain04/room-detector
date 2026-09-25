@@ -35,8 +35,9 @@ const MAX_EVENTS = 1_000;
 const MIN_RELIABLE_PACKET_RATE = 50;
 const WINDOW_MS = 10 * 1_000; // 10 seconds
 const MIN_RELIABLE_SAMPLES = 8; // require at least 8 good readings
-const DEFAULT_BASELINE_MEDIAN = 0.4115;
-const DEFAULT_BASELINE_TOLERANCE = 0.0515;
+// Calibrated from the current labelled captures in backend/data.
+const DEFAULT_BASELINE_MEDIAN = 0.348;
+const DEFAULT_BASELINE_TOLERANCE = 0.074;
 const store = globalThis as typeof globalThis & { __motionEvents?: MotionEvent[] };
 const events = (store.__motionEvents ??= []);
 
